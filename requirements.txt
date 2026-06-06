@@ -1,0 +1,10 @@
+pyparsing==3.3.2
+python-dateutil==2.9.0.post0
+scipy==1.17.1
+simplemc==0.0.3
+six==1.17.0
+sympy==1.14.0
+torch==2.12.0
+tqdm==4.68.1
+triton==3.7.0
+typing_extensions==4.15.0
