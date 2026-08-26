@@ -8,3 +8,4 @@ torch==2.12.0
 tqdm==4.68.1
 triton==3.7.0
 typing_extensions==4.15.0
+seaborn==0.13.2
