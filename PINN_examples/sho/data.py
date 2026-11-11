@@ -1,4 +1,4 @@
-"""Synthetic Simple Harmonic Oscillator data: time sampling, noisy signal and NN features."""
+"""Synthetic oscillator data: time sampling, noisy signal and NN features."""
 import numpy as np
 import torch
 
@@ -122,20 +122,17 @@ def sho_initial_conditions(A, omega, phi=0.0):
     return A * np.cos(phi), -A * omega * np.sin(phi)
 
 
-def create_synthetic_HO_data(A, omega, phi=0.0, noise_std=None,
-                             t_start=0.0, t_end=1.5, n_points=500, seed=42,
-                             sampling="uniform", sampling_kwargs=None,
-                             plot_noise_dist=False, plot_signal=False):
+def create_synthetic_data(x_fn, noise_std, t_start=0.0, t_end=1.5, n_points=500, seed=42,
+                          sampling="uniform", sampling_kwargs=None,
+                          plot_noise_dist=False, plot_signal=False, name="Harmonic Oscillator"):
     """
-    Generate synthetic Simple Harmonic Oscillator data x(t) = A cos(omega t + phi)
-    with additive Gaussian noise, sampled at (possibly) non-uniform times.
+    Generate synthetic data x_fn(t) with additive Gaussian noise, sampled at (possibly)
+    non-uniform times.
 
     Parameters
     ----------
-    A : float               Amplitude.
-    omega : float           Angular frequency (rad/s).
-    phi : float             Phase offset (rad).
-    noise_std : float       Std dev of Gaussian noise (defaults to 0.3*A).
+    x_fn : callable         Clean signal, np.ndarray t -> np.ndarray x.
+    noise_std : float       Std dev of Gaussian noise.
     t_start, t_end : float  Time interval.
     n_points : int          Number of time samples.
     seed : int              Random seed for reproducibility.
@@ -143,20 +140,18 @@ def create_synthetic_HO_data(A, omega, phi=0.0, noise_std=None,
     sampling_kwargs : dict  Extra keyword arguments for the sampling scheme.
     plot_noise_dist : bool  If True, plot the noise (error) distribution.
     plot_signal : bool      If True, plot the clean signal and noisy data.
+    name : str              System name, used in the plot title.
 
     Returns
     -------
     t, x_clean, x_noisy : np.ndarray
     """
-    if noise_std is None:
-        noise_std = 0.3 * A
-
     # Time vector (separate RNG stream so the noise is the same for every sampling scheme)
     rng_t = np.random.default_rng(seed=[seed, 1])
     t = sample_time_points(t_start, t_end, n_points, sampling, rng=rng_t, **(sampling_kwargs or {}))
 
     # Clean displacement
-    x_clean = sho_solution(t, A, omega, phi)
+    x_clean = x_fn(t)
 
     # Add Gaussian noise
     rng = np.random.default_rng(seed=seed)
@@ -168,10 +163,20 @@ def create_synthetic_HO_data(A, omega, phi=0.0, noise_std=None,
         if plot_noise_dist:
             plot_noise_distribution(noise)
         if plot_signal:
-            _plot_signal(t, x_clean, x_noisy,
-                         title=f"Synthetic Simple Harmonic Oscillator Data ({sampling} sampling)")
+            _plot_signal(t, x_clean, x_noisy, title=f"Synthetic {name} Data ({sampling} sampling)")
 
     return t, x_clean, x_noisy
+
+
+def create_synthetic_HO_data(A, omega, phi=0.0, noise_std=None, **kwargs):
+    """
+    Synthetic Simple Harmonic Oscillator data x(t) = A cos(omega t + phi) with Gaussian noise
+    (noise_std defaults to 0.3*A). Other keyword arguments as in `create_synthetic_data`.
+    """
+    if noise_std is None:
+        noise_std = 0.3 * A
+    return create_synthetic_data(lambda t: sho_solution(t, A, omega, phi), noise_std,
+                                 name="Simple Harmonic Oscillator", **kwargs)
 
 
 def create_NN_features(t, x_noisy, normalize=True):

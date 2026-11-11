@@ -28,10 +28,11 @@ def build_model(hidden_sizes, seed=0):
 # ---------------------------------------------------------------------------
 # Physics-informed components
 # ---------------------------------------------------------------------------
-def physics_residual(model, t_norm, omega, t_std, x_std, x_mean=0.0):
+def physics_residual(model, t_norm, osc, t_mean, t_std, x_mean, x_std):
     """
-    Computes x'' + omega^2 * x = 0
-    correcting for the chain rule introduced by normalization.
+    Residual of the oscillator ODE (see `Oscillator`)
+        x'' + 2 zeta omega x' + omega^2 x - F0 cos(Omega t)
+    in physical units, correcting for the chain rule introduced by normalization.
     `t_norm` must have requires_grad=True.
     """
     x_norm = model(t_norm)
@@ -43,12 +44,13 @@ def physics_residual(model, t_norm, omega, t_std, x_std, x_mean=0.0):
                                    create_graph=True)[0]
 
     # Chain rule: since t_norm = (t - t_mean)/t_std and x_norm = (x - x_mean)/x_std,
-    # d2x/dt2 = (x_std / t_std^2) * d2x_norm/dt_norm2
+    # dx/dt = (x_std / t_std) * dx_norm/dt_norm,  d2x/dt2 = (x_std / t_std^2) * d2x_norm/dt_norm2
+    dx_dt = (x_std / t_std) * dx_norm
     d2x_dt2 = (x_std / t_std**2) * d2x_norm
     x_real = x_norm * x_std + x_mean
+    t_real = t_norm * t_std + t_mean
 
-    residual = d2x_dt2 + (omega**2) * x_real
-    return residual
+    return osc.residual(x_real, dx_dt, d2x_dt2, t_real)
 
 
 def ic_loss(model, t_mean, t_std, x_mean, x_std, x0, v0, t0=0.0):
@@ -104,10 +106,11 @@ def train_ANN(model, t_data_norm, x_data_norm, lr=1e-3, n_epochs=1500, print_eve
 
 
 def train_PINN(model, t_data_norm, x_data_norm, t_colloc_norm,
-               omega, t_mean, t_std, x_mean, x_std, x0, v0,
+               osc, t_mean, t_std, x_mean, x_std, x0, v0,
                lambda_physics=5e-4, lambda_ic=5e-4, lr=5e-5, n_epochs=int(2e4), print_every=500):
     """
     Train a PINN with loss = data loss + lambda_physics * physics loss + lambda_ic * IC loss.
+    osc : Oscillator  Governing ODE enforced on the collocation points.
 
     Returns
     -------
@@ -127,7 +130,7 @@ def train_PINN(model, t_data_norm, x_data_norm, t_colloc_norm,
         loss_data = criterion(x_pred_norm, x_data_norm)
 
         # Physics loss (ODE residual on collocation points)
-        residual = physics_residual(model, t_colloc_norm, omega, t_std, x_std, x_mean)
+        residual = physics_residual(model, t_colloc_norm, osc, t_mean, t_std, x_mean, x_std)
         loss_physics = torch.mean(residual**2)
 
         # Initial condition loss
